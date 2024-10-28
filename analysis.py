@@ -470,8 +470,8 @@ import gc
 del(my_model)
 gc.collect()
 my_model = HookedTransformer.from_pretrained(
-    "gpt2-large",
-    # "EleutherAI/pythia-1.4b",
+    # "gpt2-xl",
+    "EleutherAI/pythia-1b",
     # "meta-llama/Llama-3.2-3B",
     fold_ln=True,
     device=device
@@ -548,6 +548,67 @@ for idx in np.argsort(-alignments)[:1]:
     # print proportion of positive eigenvalues:
     print((filtered_L.real > 0).sum().item() / len(filtered_L))
 
+
+# %%
+def get_projection_magnitude(a, b):
+    return torch.dot(a, b) / b.norm()
+
+# W_U_pinv = torch.linalg.pinv(my_model.W_U)
+
+def reverse_unembed(model, token_id):
+    one_hot = torch.nn.functional.one_hot(token_id, num_classes=model.W_U.shape[1])[0]
+    print(one_hot.shape)
+    pre_bias_logits = one_hot - model.b_U
+    return pre_bias_logits @ W_U_pinv
+
+# %%
+print(token_b)
+embedding_b = reverse_unembed(my_model, token_b)
+my_model.unembed(embedding_b.to(device))
+
+# %%
+one_hot = torch.nn.functional.one_hot(token_b, num_classes=my_model.W_U.shape[1])[0].float()
+print(one_hot)
+print(one_hot.max())
+temp = one_hot @ W_U_pinv @ my_model.W_U
+temp.max()
+
+# %%
+print("W_U shape:", my_model.W_U.shape)
+print("W_U_pinv shape:", W_U_pinv.shape)
+print("One-hot vector shape:", one_hot.shape)
+
+# %%
+word_a = "rough"
+word_b = "hard"
+token_a = my_model.tokenizer.encode(f" {word_a}", add_special_tokens=False, return_tensors='pt')[0].to(device)
+token_b = my_model.tokenizer.encode(f" {word_b}", add_special_tokens=False, return_tensors='pt')[0].to(device)
+
+embedding_a = embed(my_model, token_a).cpu()
+embedding_b = embed(my_model, [token_b]).cpu()
+# embedding_b = reverse_unembed(my_model, token_b).cpu()
+
+print(unembed(my_model, embedding_b.to(device)).max())
+
+# eigen_idxs = torch.arange(10)
+# eigen_idxs = torch.tensor([0, 2, 3, 5, 6, 8, 9])
+# eigen_idxs = torch.randperm(255)[:7]
+eigen_idxs = torch.arange(255)
+
+ratios = []
+for i, eigenvector in enumerate(filtered_V[:, eigen_idxs].T):
+    proj_a = get_projection_magnitude(embedding_a[0], eigenvector.real)
+    proj_b = get_projection_magnitude(embedding_b[0], eigenvector.real)
+    ratio = proj_a / proj_b
+    ratios.append(ratio)
+
+ratios = torch.stack(ratios)
+negative_ratio_proportion = (ratios < 0).sum().item() / len(ratios)
+print(negative_ratio_proportion)
+    # print(f"Eigenvalue {eigen_idxs[i]}: {proj_a:.3f} {proj_b:.3f}\tratio: {proj_a / proj_b:.3f}")
+# %%
+filtered_V.shape
+
 # %%
 # get average of first 10 eigenvectors
 interesting_vector = filtered_V[:, :10].mean(1)
@@ -580,7 +641,7 @@ def approx_transform_2(vec, V, L, _=None):
     vec = vec.to(dtype=torch.complex64).cpu()
     V = V.cpu()
     L = L.cpu()
-    L[7:] = 0.
+    L[:10] = 0.
     vec = vec.to(dtype=torch.complex64, device='cpu')
     # Solve V @ x = vec for x
     V_inv_vec = torch.linalg.solve(V, vec)
