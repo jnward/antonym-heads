@@ -6,13 +6,6 @@ import torch
 from tqdm import tqdm
 import plotly.express as px
 
-# Imports for displaying vis in Colab / notebook
-import webbrowser
-import http.server
-import socketserver
-import threading
-PORT = 8000
-
 os.environ["HF_TOKEN"] = "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"
 
 torch.set_grad_enabled(False)
@@ -188,7 +181,74 @@ def plot_OV(token_logits, layer_no, head_no):
         color_continuous_midpoint=0,
         
     )
-    fig.show()
+    return fig
+    # fig.show()
+
+# import plotly.graph_objects as go
+
+# def plot_OV(token_logits, layer_no, head_no):
+#     fig = go.Figure(
+#         data=go.Heatmap(
+#             z=token_logits[::-1, :],
+#             x=word_list[:len(token_logits)],
+#             y=word_list[:len(token_logits)][::-1],
+#             colorscale='RdBu',
+#             zmid=0  # Midpoint for the diverging color scale
+#         )
+#     )
+
+#     fig.update_layout(
+#         title=f"L{layer_no}H{head_no}",
+#         xaxis_title="logit",
+#         yaxis_title="token"
+#     )
+
+#     fig.update_xaxes(scaleanchor="y", scaleratio=1)
+#     fig.update_yaxes(scaleanchor="x", scaleratio=1)
+
+#     return fig
+    # fig.show()
+
+def convert_to_polar(eigenvalues):
+    real_parts = eigenvalues.real
+    imag_parts = eigenvalues.imag
+
+    # Compute the magnitude (r) and then take the log of the magnitude
+    magnitude = torch.sqrt(real_parts**2 + imag_parts**2)
+    log_magnitude = torch.log(magnitude)  # or torch.log10(magnitude) for base-10
+
+    # Compute the angle (theta)
+    theta = torch.atan2(imag_parts, real_parts)
+    theta = torch.rad2deg(theta)
+    return log_magnitude, theta
+
+import pandas as pd
+
+def plot_polar_eigenvalues(L):
+    log_magnitude, theta = convert_to_polar(L)
+    df = pd.DataFrame({
+        'log_magnitude': log_magnitude.numpy(),
+        'theta': theta.numpy(),
+        'idx': range(len(L))
+    })
+
+    fig = px.scatter_polar(
+        df,
+        r='log_magnitude',
+        theta='theta', 
+        title='Eigenvalues in Polar Coordinates',
+        labels={
+            'log_magnitude': 'Log Magnitude',
+            'theta': 'Angle (degrees)',
+            'idx': 'idx',
+        },
+        hover_data={'idx': True},
+        start_angle=0,
+    )
+
+    return fig
+    # fig.show()
+
 
 # %%
 # OVs = []
@@ -360,18 +420,19 @@ print(f"R-squared: {r_squared:.4f}")
 import numpy as np
 
 model_names = {
-    "gpt2": 137,
-    "gpt2-medium": 380,
-    "gpt2-large": 812,
-    "gpt2-xl": 1610,
-    "EleutherAI/pythia-70m": 96,
-    "EleutherAI/pythia-160m": 213,
-    "EleutherAI/pythia-410m": 506,
-    "EleutherAI/pythia-1b": 1080,
-    "EleutherAI/pythia-1.4b": 1520,
-    "EleutherAI/pythia-2.8b": 2910,
-    "meta-llama/Llama-3.2-1B": 1240,
-    "meta-llama/Llama-3.2-3B": 3210,
+    # "gpt2": 137,
+    # "gpt2-medium": 380,
+    # "gpt2-large": 812,
+    # "gpt2-xl": 1610,
+    # "EleutherAI/pythia-70m": 96,
+    # "EleutherAI/pythia-160m": 213,
+    # "EleutherAI/pythia-410m": 506,
+    # "EleutherAI/pythia-1b": 1080,
+    # "EleutherAI/pythia-1.4b": 1520,
+    # "EleutherAI/pythia-2.8b": 2910,
+    # "meta-llama/Llama-3.2-1B": 1240,
+    # "meta-llama/Llama-3.2-3B": 3210,
+    "google/gemma-2-2b": 2610,
 }
 
 model_names = dict(reversed(model_names.items()))
@@ -391,17 +452,23 @@ for model_name in model_names:
         device=device
     )
 
-    OVs, alignments = compute_OV_and_tally_scores_for_model(my_model)
+    # OVs, alignments = compute_OV_and_tally_scores_for_model(my_model)
 
-    alignments = np.stack(alignments)
-    OV_stack = torch.stack(OVs)
+    # alignments = np.stack(alignments)
+    # OV_stack = torch.stack(OVs)
 
     top_idx = None
     for idx in np.argsort(-alignments)[:1]:
         if top_idx is None:
             top_idx = idx
         print(alignments[idx])
-        plot_OV(OV_stack[idx].to(torch.float32).cpu().numpy(), 1+idx//my_model.cfg.n_heads, idx%my_model.cfg.n_heads)
+        block_no = 1+idx//my_model.cfg.n_heads
+        head_no = idx%my_model.cfg.n_heads
+        plot_OV(OV_stack[idx].to(torch.float32).cpu().numpy(), block_no, head_no).show()
+        OV = my_model.blocks[block_no].attn.OV[head_no]
+        L, V = torch.linalg.eig(OV.AB.T.cpu())
+        filtered_L = L[L.real.abs() > 1e-3]
+        plot_polar_eigenvalues(filtered_L).show()
 
     tally_scores[model_name] = alignments[top_idx].item()
     top_ovs[model_name] = OVs[top_idx].cpu().numpy()
@@ -429,6 +496,8 @@ def get_family(name):
         return "Pythia"
     elif "llama" in name.lower():
         return "Llama 3.2"
+    elif "gemma" in name:
+        return "Gemma 2"
     else:
         return "Other"
 
@@ -471,8 +540,9 @@ del(my_model)
 gc.collect()
 my_model = HookedTransformer.from_pretrained(
     # "gpt2-xl",
-    "EleutherAI/pythia-1b",
+    # "EleutherAI/pythia-1b",
     # "meta-llama/Llama-3.2-3B",
+    "google/gemma-2-2b",
     fold_ln=True,
     device=device
 )
@@ -487,56 +557,32 @@ OV_stack = torch.stack(OVs)
 
 # %%
 
-def convert_to_polar(eigenvalues):
-    real_parts = eigenvalues.real
-    imag_parts = eigenvalues.imag
-
-    # Compute the magnitude (r) and then take the log of the magnitude
-    magnitude = torch.sqrt(real_parts**2 + imag_parts**2)
-    log_magnitude = torch.log(magnitude)  # or torch.log10(magnitude) for base-10
-
-    # Compute the angle (theta)
-    theta = torch.atan2(imag_parts, real_parts)
-    theta = torch.rad2deg(theta)
-    return log_magnitude, theta
 
 # %%
-import pandas as pd
-# log_magnitude, theta = convert_to_polar(L)
+from plotly.subplots import make_subplots
 
-def plot_polar_eigenvalues(L):
-    log_magnitude, theta = convert_to_polar(L)
-    # Create a DataFrame for easier plotting
-    df = pd.DataFrame({
-        'log_magnitude': log_magnitude.numpy(),
-        'theta': theta.numpy(),
-        'idx': range(len(L))
-    })
+n_row = 1
+n_col = 1
 
-    # Create the polar plot using Plotly Express
-    fig = px.scatter_polar(
-        df,
-        r='log_magnitude',
-        theta='theta', 
-        title='Eigenvalues in Polar Coordinates',
-        labels={
-            'log_magnitude': 'Log Magnitude',
-            'theta': 'Angle (degrees)',
-            'idx': 'idx',
-        },
-        hover_data={'idx': True},
-        start_angle=0,
-    )
+# set large width and height
+fig = make_subplots(rows=n_row, cols=n_col*2,
+    specs=[[{"type": "polar"}, {"type": "xy"}] * n_col] * n_row,
+    subplot_titles=[f"Head {i}" for i in range(1, 9)],
+)
+fig.update_layout(
+    autosize=False,
+    width=400*n_col*2,
+    height=400*n_row,
+    margin=dict(l=80, r=80, t=80, b=0),
+)
 
-    # Show the plot
-    fig.show()
-
-# %%
-for idx in np.argsort(-alignments)[:1]:
+for i, idx in enumerate(np.argsort(-alignments)[:1]):
     block_no, head_no = 1+idx//my_model.cfg.n_heads, idx%my_model.cfg.n_heads
     print(f"L{block_no}H{head_no}")
     print("tally score:", alignments[idx])
-    plot_OV(OV_stack[idx].to(torch.float32).cpu().numpy(), 1+idx//my_model.cfg.n_heads, idx%my_model.cfg.n_heads)
+    OV_plot = plot_OV(OV_stack[idx].to(torch.float32).cpu().numpy(), 1+idx//my_model.cfg.n_heads, idx%my_model.cfg.n_heads)
+    # OV_plot.show()
+    # break
     OV = my_model.blocks[block_no].attn.OV[head_no]
     L, V = torch.linalg.eig(OV.AB.T.cpu())
     # filter out L under 1e-8
@@ -544,12 +590,24 @@ for idx in np.argsort(-alignments)[:1]:
     filtered_V = V[:, L.real.abs() > 1e-3]
     print(filtered_L.shape)
     print(filtered_V.shape)
-    plot_polar_eigenvalues(filtered_L)
+    eigen_plot = plot_polar_eigenvalues(filtered_L)
     # print proportion of positive eigenvalues:
-    print((filtered_L.real > 0).sum().item() / len(filtered_L))
-
+    print((filtered_L .real > 0).sum().item() / len(filtered_L))
+    row_no = 1+i//n_col
+    col_no = 1+(i%n_col)*2
+    for trace in OV_plot.data:
+        fig.add_trace(trace, row=row_no, col=col_no+1)
+    for trace in eigen_plot.data:
+        fig.add_trace(trace, row=row_no, col=col_no)
+    # set automargins
+    fig.update_xaxes(scaleanchor='y', scaleratio=1, row=row_no, col=col_no+1)
+    # fig.update_yaxes(scaleanchor='x', scaleratio=1, row=row_no, col=col_no+1)
+fig.show()
 
 # %%
+# fig.show()
+
+ # %%
 def get_projection_magnitude(a, b):
     return torch.dot(a, b) / b.norm()
 
@@ -821,5 +879,30 @@ for head_id in component_head_ids:
     print(f"L{layer_no}H{head_no}: {components[head_id, top_component_id]}")
     plot_OV(OV_stack[head_id].cpu().numpy(), layer_no, head_no)
 
+
+# %%
+
+import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
+# Sample data
+df = px.data.iris()
+
+# Create individual figures
+fig1 = px.scatter(df, x="sepal_width", y="sepal_length", color="species")
+fig2 = px.histogram(df, x="petal_length", color="species")
+
+# Create subplot
+fig = make_subplots(rows=1, cols=2)
+
+# Add traces from each Plotly Express figure
+for trace in fig1.data:
+    fig.add_trace(trace, row=1, col=1)
+for trace in fig2.data:
+    fig.add_trace(trace, row=1, col=2)
+
+fig.update_layout(title_text="Subplots with Plotly Express")
+fig.show()
 
 # %%
