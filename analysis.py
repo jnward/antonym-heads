@@ -11,64 +11,64 @@ from transformer_lens import FactoredMatrix, HookedTransformer
 
 torch.set_grad_enabled(False)
 
-device = 'cuda'
+device = "cuda"
 
 # %%
 pairs = [
-    ('true', 'false'),
-    ('hot', 'cold'),
-    ('tall', 'short'),
-    ('big', 'small'),
-    ('open', 'closed'),
-    ('happy', 'sad'),
-    ('light', 'dark'),
-    ('fast', 'slow'),
-    ('strong', 'weak'),
-    ('hard', 'soft'),
-    ('early', 'late'),
-    ('full', 'empty'),
-    ('high', 'low'),
-    ('inside', 'outside'),
-    ('clean', 'dirty'),
-    ('new', 'old'),
-    ('sweet', 'sour'),
-    ('loud', 'quiet'),
-    ('day', 'night'),
-    ('easy', 'difficult'),
-    ('near', 'far'),
-    ('rich', 'poor'),
-    ('smooth', 'rough'),
-    ('thin', 'thick'),
-    ('east', 'west'),
-    ('yes', 'no'),
-    ('male', 'female'),
-    ('up', 'down'),
-    ('left', 'right'),
-    ('in', 'out'),
-    ('begin', 'end'),
-    ('before', 'after'),
-    ('front', 'back'),
-    ('more', 'less'),
-    ('above', 'below'),
-    ('push', 'pull'),
-    ('enter', 'exit'),
-    ('win', 'lose'),
-    ('give', 'take'),
-    ('black', 'white'),
-    ('buy', 'sell'),
-    ('add', 'subtract'),
-    ('north', 'south'),
-    ('under', 'over'),
-    ('good', 'bad'),
-    ('summer', 'winter'),
-    ('wet', 'dry'),
-    ('alive', 'dead'),
-    ('first', 'last'),
-    ('accept', 'reject'),
-    ('always', 'never'),
-    ('come', 'go'),
-    ('laugh', 'cry'),
-    ('single', 'married')
+    ("true", "false"),
+    ("hot", "cold"),
+    ("tall", "short"),
+    ("big", "small"),
+    ("open", "closed"),
+    ("happy", "sad"),
+    ("light", "dark"),
+    ("fast", "slow"),
+    ("strong", "weak"),
+    ("hard", "soft"),
+    ("early", "late"),
+    ("full", "empty"),
+    ("high", "low"),
+    ("inside", "outside"),
+    ("clean", "dirty"),
+    ("new", "old"),
+    ("sweet", "sour"),
+    ("loud", "quiet"),
+    ("day", "night"),
+    ("easy", "difficult"),
+    ("near", "far"),
+    ("rich", "poor"),
+    ("smooth", "rough"),
+    ("thin", "thick"),
+    ("east", "west"),
+    ("yes", "no"),
+    ("male", "female"),
+    ("up", "down"),
+    ("left", "right"),
+    ("in", "out"),
+    ("begin", "end"),
+    ("before", "after"),
+    ("front", "back"),
+    ("more", "less"),
+    ("above", "below"),
+    ("push", "pull"),
+    ("enter", "exit"),
+    ("win", "lose"),
+    ("give", "take"),
+    ("black", "white"),
+    ("buy", "sell"),
+    ("add", "subtract"),
+    ("north", "south"),
+    ("under", "over"),
+    ("good", "bad"),
+    ("summer", "winter"),
+    ("wet", "dry"),
+    ("alive", "dead"),
+    ("first", "last"),
+    ("accept", "reject"),
+    ("always", "never"),
+    ("come", "go"),
+    ("laugh", "cry"),
+    ("single", "married"),
 ]
 
 left = []
@@ -80,6 +80,7 @@ word_list = left + right
 n_words = len(word_list)
 print(n_words)
 
+
 # %%
 def embed(model, token_ids):
     x = model.W_E[token_ids]
@@ -87,15 +88,19 @@ def embed(model, token_ids):
     x = model.blocks[0](x[:, None, :])[:, 0, :]
     return x
 
+
 def unembed(model, x):
     return x @ model.W_U + model.b_U
+
 
 def idx_to_head_no(model, idx):
     layer_no = idx // model.cfg.n_heads + 1
     head_no = idx % model.cfg.n_heads
     return layer_no, head_no
 
+
 # %%
+
 
 def compute_OV(model, layer_no, head_no):
     tokenize = lambda x: model.tokenizer.encode(f" {x}", add_special_tokens=False)
@@ -107,22 +112,23 @@ def compute_OV(model, layer_no, head_no):
     token_logits: FactoredMatrix = logits[:, tokens]
     return token_logits
 
-def plot_OV(token_logits, title=''):
+
+def plot_OV(token_logits, title=""):
     fig = px.imshow(
         token_logits,
         title=title,
-        x=word_list[:len(token_logits)],
-        y=word_list[:len(token_logits)],
+        x=word_list[: len(token_logits)],
+        y=word_list[: len(token_logits)],
         labels={
-            'x': "logit",
-            'y': "token",
+            "x": "logit",
+            "y": "token",
         },
-        color_continuous_scale='rdbu',
+        color_continuous_scale="rdbu",
         color_continuous_midpoint=0,
-
     )
     return fig
     # fig.show()
+
 
 def convert_to_polar(eigenvalues):
     real_parts = eigenvalues.real
@@ -138,28 +144,31 @@ def convert_to_polar(eigenvalues):
 
 def plot_polar_eigenvalues(L, title=None):
     log_magnitude, theta = convert_to_polar(L)
-    df = pd.DataFrame({
-        'log_magnitude': log_magnitude.numpy(),
-        'theta': theta.numpy(),
-        'idx': range(len(L))
-    })
+    df = pd.DataFrame(
+        {
+            "log_magnitude": log_magnitude.numpy(),
+            "theta": theta.numpy(),
+            "idx": range(len(L)),
+        }
+    )
 
     fig = px.scatter_polar(
         df,
-        r='log_magnitude',
-        theta='theta',
+        r="log_magnitude",
+        theta="theta",
         title=title,
         labels={
-            'log_magnitude': 'Log Magnitude',
-            'theta': 'Angle (degrees)',
-            'idx': 'idx',
+            "log_magnitude": "Log Magnitude",
+            "theta": "Angle (degrees)",
+            "idx": "idx",
         },
-        hover_data={'idx': True},
+        hover_data={"idx": True},
         start_angle=0,
     )
 
     return fig
     # fig.show()
+
 
 # %%
 from tqdm import tqdm
@@ -167,7 +176,10 @@ from tqdm import tqdm
 
 def compute_OV_and_tally_scores_for_head(model, layer_no, head_no):
     my_OV = compute_OV(model, layer_no, head_no)
-    alignment = (my_OV.to(torch.float32).cpu().numpy().argmax(1) == list(range(n_words//2, n_words)) + list(range(n_words//2))).sum()
+    alignment = (
+        my_OV.to(torch.float32).cpu().numpy().argmax(1)
+        == list(range(n_words // 2, n_words)) + list(range(n_words // 2))
+    ).sum()
     return my_OV, alignment
 
 
@@ -179,7 +191,9 @@ def compute_OV_and_tally_scores_for_model(model):
     with tqdm(total=total_iterations, desc="Processing") as pbar:
         for layer_no in range(1, model.cfg.n_layers):
             for head_no in range(model.cfg.n_heads):
-                my_OV, alignment = compute_OV_and_tally_scores_for_head(model, layer_no, head_no)
+                my_OV, alignment = compute_OV_and_tally_scores_for_head(
+                    model, layer_no, head_no
+                )
                 OVs.append(my_OV)
                 alignments.append(alignment)
                 pbar.update(1)
@@ -208,17 +222,17 @@ model_names = {
 top_heads = {
     "google/gemma-2-2b": (22, 0),
     "meta-llama/Llama-3.2-3B": (19, 18),
-    'meta-llama/Llama-3.2-1B': (11, 23),
-    'EleutherAI/pythia-2.8b': (15, 3),
-    'EleutherAI/pythia-1.4b': (13, 2),
-    'EleutherAI/pythia-1b': (9, 1),
-    'EleutherAI/pythia-410m': (13, 1),
-    'EleutherAI/pythia-160m': (5, 9),
-    'EleutherAI/pythia-70m': (3, 1),
-    'gpt2-xl': (26, 10),
-    'gpt2-large': (25, 5),
-    'gpt2-medium': (13, 2),
-    'gpt2-small': (9, 7)
+    "meta-llama/Llama-3.2-1B": (11, 23),
+    "EleutherAI/pythia-2.8b": (15, 3),
+    "EleutherAI/pythia-1.4b": (13, 2),
+    "EleutherAI/pythia-1b": (9, 1),
+    "EleutherAI/pythia-410m": (13, 1),
+    "EleutherAI/pythia-160m": (5, 9),
+    "EleutherAI/pythia-70m": (3, 1),
+    "gpt2-xl": (26, 10),
+    "gpt2-large": (25, 5),
+    "gpt2-medium": (13, 2),
+    "gpt2-small": (9, 7),
 }
 
 tally_scores = {
@@ -247,31 +261,29 @@ import gc
 
 for i, model_name in enumerate(model_names):
     try:
-        del(my_model)
+        del my_model
         gc.collect()
         torch.cuda.empty_cache()
     except NameError:
         pass
     print(model_name)
     my_model = HookedTransformer.from_pretrained(
-        model_name,
-        fold_ln=True,
-        device=device
+        model_name, fold_ln=True, device=device
     )
     block_no, head_no = top_heads[model_name]
 
-    token_OV, alignment = compute_OV_and_tally_scores_for_head(my_model, block_no, head_no)
+    token_OV, alignment = compute_OV_and_tally_scores_for_head(
+        my_model, block_no, head_no
+    )
 
     print(alignment)
-    OV_fig = plot_OV(token_OV.to(torch.float32).cpu().numpy(), f"{model_name}: L{block_no}H{head_no}")
+    OV_fig = plot_OV(
+        token_OV.to(torch.float32).cpu().numpy(), f"{model_name}: L{block_no}H{head_no}"
+    )
     OV_fig.update_layout(title_x=0.5)
     OV_fig.update_layout(margin=dict(l=0, r=0, t=80, b=40))
 
-    OV_fig.update_layout(
-        autosize=False,
-        width=440,
-        height=440
-    )
+    OV_fig.update_layout(autosize=False, width=440, height=440)
     OV_fig.show()
     OV_fig.write_image(
         # f"OV_plots/{i}_OV_{model_name}_L{block_no}H{head_no}.png",
@@ -281,22 +293,17 @@ for i, model_name in enumerate(model_names):
     OV = my_model.blocks[block_no].attn.OV[head_no]
     L, V = torch.linalg.eig(OV.AB.T.cpu())
     filtered_L = L[L.real.abs() > 1e-3]
-    eigen_fig = plot_polar_eigenvalues(filtered_L, f"{model_name}: L{block_no}H{head_no}")
+    eigen_fig = plot_polar_eigenvalues(
+        filtered_L, f"{model_name}: L{block_no}H{head_no}"
+    )
     eigen_fig.update_layout(title_x=0.5)
     eigen_fig.update_layout(margin=dict(l=0, r=0, t=80, b=40))
-    eigen_fig.update_layout(
-        autosize=False,
-        width=440,
-        height=440
-    )
+    eigen_fig.update_layout(autosize=False, width=440, height=440)
     eigen_fig.show()
-    eigen_fig.write_image(
-        f"eigen_plots/plot_{i}.png",
-        scale=2
-    )
+    eigen_fig.write_image(f"eigen_plots/plot_{i}.png", scale=2)
     tally_scores[model_name] = alignment
 
-    del(my_model)
+    del my_model
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -304,14 +311,16 @@ for i, model_name in enumerate(model_names):
 import gc
 
 import pandas as pd
+
 # %%
 import plotly.express as px
 
 data = {
     "model_name": list(model_names.keys()),
     "model_size": list(model_names.values()),
-    "tally_score": [tally_scores[name] / 108 for name in model_names]
+    "tally_score": [tally_scores[name] / 108 for name in model_names],
 }
+
 
 def get_family(name):
     if "gpt" in name:
@@ -325,6 +334,7 @@ def get_family(name):
     else:
         return "Other"
 
+
 data["model_family"] = [get_family(name) for name in data["model_name"]]
 
 df = pd.DataFrame(data)
@@ -336,22 +346,19 @@ fig = px.line(
     log_x=True,
     color="model_family",
     markers=True,
-    labels={"model_size": "Model Size (millions of parameters)", "tally_score": "Tally Scores", "model_family": "Model Family"},
-    title="Max Tally Scores by Model Size"
+    labels={
+        "model_size": "Model Size (millions of parameters)",
+        "tally_score": "Tally Scores",
+        "model_family": "Model Family",
+    },
+    title="Max Tally Scores by Model Size",
 )
 
-fig.update_layout(
-    autosize=False,
-    width=660,
-    height=440
-)
+fig.update_layout(autosize=False, width=660, height=440)
 
 fig.show()
 
-fig.write_image(
-    "tally_scores.png",
-    scale=2
-)
+fig.write_image("tally_scores.png", scale=2)
 
 
 # ablation study
@@ -364,9 +371,11 @@ experiment_string = ""
 for l, r in zip(left, right):
     experiment_word_list.append(l)
     experiment_word_list.append(r)
-    experiment_string += (f" {l} {r}\n")
+    experiment_string += f" {l} {r}\n"
 
 batch_size = 16
+
+
 def compute_ablation_effect(model):
     loss_diffs = {}
     tokenizer = model.tokenizer
@@ -388,7 +397,7 @@ def compute_ablation_effect(model):
                 np.random.shuffle(shuffled_word_list)
 
                 test_sequences.append(
-                    tokenizer.encode(' ' + ' '.join(shuffled_word_list))
+                    tokenizer.encode(" " + " ".join(shuffled_word_list))
                 )
 
             test_batch = np.stack(test_sequences)
@@ -398,7 +407,7 @@ def compute_ablation_effect(model):
 
             for sample in test_batch:
                 _, cache = model.run_with_cache(sample[None, :])
-                z = cache[f'blocks.{block_no}.attn.hook_z'][0, :, head_no, :]
+                z = cache[f"blocks.{block_no}.attn.hook_z"][0, :, head_no, :]
                 z_stack.append(z)
 
             z_stack = torch.stack(z_stack)
@@ -409,27 +418,31 @@ def compute_ablation_effect(model):
                 return value
 
             original_loss = model(
-                experiment_sequence,
-                return_type="loss",
-                loss_per_token=True
+                experiment_sequence, return_type="loss", loss_per_token=True
             )
 
             ablated_loss = model.run_with_hooks(
                 experiment_sequence,
                 return_type="loss",
                 loss_per_token=True,
-                fwd_hooks=[(
-                    get_act_name("z", block_no),
-                    mean_ablation_hook
-                    )]
-                )
+                fwd_hooks=[(get_act_name("z", block_no), mean_ablation_hook)],
+            )
 
-            loss_difference = ablated_loss[:, 1::3].mean() - original_loss[:, 1::3].mean()
+            loss_difference = (
+                ablated_loss[:, 1::3].mean() - original_loss[:, 1::3].mean()
+            )
             head_id = f"L{block_no}H{head_no}"
             loss_diffs[head_id] = loss_difference
             # print(f"Loss difference for {head_id}: {loss_difference.item():.3f}")
 
-    print({k: v for k, v in sorted(loss_diffs.items(), key=lambda item: item[1], reverse=True)})
+    print(
+        {
+            k: v
+            for k, v in sorted(
+                loss_diffs.items(), key=lambda item: item[1], reverse=True
+            )
+        }
+    )
     return loss_diffs
 
 
@@ -443,7 +456,7 @@ for model_name in [
     "gpt2-large"
 ]:
     try:
-        del(my_model)
+        del my_model
         gc.collect()
         torch.cuda.empty_cache()
     except NameError:
@@ -451,9 +464,7 @@ for model_name in [
     print(model_name)
 
     my_model = HookedTransformer.from_pretrained(
-        model_name,
-        fold_ln=True,
-        device=device
+        model_name, fold_ln=True, device=device
     )
 
     OVs, alignments = compute_OV_and_tally_scores_for_model(my_model)
@@ -464,7 +475,9 @@ for model_name in [
     y = []
     head_ids = []
 
-    for idx, (loss_diff, alignment) in enumerate(zip(my_loss_diffs.values(), alignments)):
+    for idx, (loss_diff, alignment) in enumerate(
+        zip(my_loss_diffs.values(), alignments)
+    ):
         loss_diff = loss_diff.item()
         x.append(alignment)
         y.append(loss_diff)
@@ -474,14 +487,18 @@ for model_name in [
     top_block, top_head = top_heads[model_name]
     hoi = f"L{top_block}H{top_head}"
 
-    df = pd.DataFrame({
-        "tally_score": [s/108 for s in x],
-        "ablation_score": y,
-        "head_id": head_ids,
-        "is_hoi": [head_id == hoi for head_id in head_ids],
-    })
+    df = pd.DataFrame(
+        {
+            "tally_score": [s / 108 for s in x],
+            "ablation_score": y,
+            "head_id": head_ids,
+            "is_hoi": [head_id == hoi for head_id in head_ids],
+        }
+    )
 
-    slope, intercept, r_value, p_value, std_err = linregress(df['tally_score'], df['ablation_score'])
+    slope, intercept, r_value, p_value, std_err = linregress(
+        df["tally_score"], df["ablation_score"]
+    )
     r_squared = r_value**2
     print(f"R-squared: {r_squared:.4f}")
 
@@ -493,24 +510,23 @@ for model_name in [
         # set color legend labels
         hover_data=["head_id"],
         labels={
-            'tally_score': 'Tally Score',
-            'ablation_score': 'Ablation Effect (loss difference)'
+            "tally_score": "Tally Score",
+            "ablation_score": "Ablation Effect (loss difference)",
         },
-        title=f"Ablation Effect vs Tally Scores<br>{model_name}"
+        title=f"Ablation Effect vs Tally Scores<br>{model_name}",
     )
     fig.add_annotation(
-      x=0.97, y=0.97, xref="paper", yref="paper",
-      text=f"R^2: {r_squared:.2f}",
-      showarrow=False,
-      font=dict(size=12)
+        x=0.97,
+        y=0.97,
+        xref="paper",
+        yref="paper",
+        text=f"R^2: {r_squared:.2f}",
+        showarrow=False,
+        font=dict(size=12),
     )
-    y_max = df['ablation_score'].max()
+    y_max = df["ablation_score"].max()
     y_buffer = y_max * 0.15
-    fig.update_layout(
-        yaxis=dict(
-            range=[None, y_max + y_buffer]
-        )
-    )
+    fig.update_layout(yaxis=dict(range=[None, y_max + y_buffer]))
 
     fig.update_layout(showlegend=False)
     fig.update_layout(
@@ -519,9 +535,6 @@ for model_name in [
         height=440,
     )
     fig.show()
-    fig.write_image(
-        f"ablation_plots/{model_name.split('/')[-1]}.png",
-        scale=2
-    )
+    fig.write_image(f"ablation_plots/{model_name.split('/')[-1]}.png", scale=2)
 
     # break
